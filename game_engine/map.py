@@ -10,11 +10,11 @@ DEFAULT_MAP_PATH = Path(__file__).parent.parent / 'data' / 'classic_map.json'
 
 class Province:
     """Represents a single province on the game map."""
-    def __init__(self, p_id, name, is_supply_center, is_coastal, province_type):
+    def __init__(self, p_id, name, is_supply_center, province_type):
         self.id = p_id
         self.name = name
         self.is_supply_center = is_supply_center
-        self.is_coastal = is_coastal
+        # is_coastal removed as it's no longer in the data file
         self.type = province_type
     
     def __repr__(self):
@@ -49,7 +49,6 @@ class GameMap:
                 p_id=p_id,
                 name=attrs['name'],
                 is_supply_center=attrs['is_supply_center'],
-                is_coastal=attrs['is_coastal'],
                 province_type=attrs['type']
             )
         self.adjacencies = data['adjacencies']
@@ -71,4 +70,3 @@ class GameMap:
         """Calculates and stores all-pairs shortest paths for all provinces."""
         for province_id in self.provinces:
             self.distances[province_id] = self._bfs(province_id)
-

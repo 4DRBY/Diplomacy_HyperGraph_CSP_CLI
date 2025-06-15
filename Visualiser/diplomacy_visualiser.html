@@ -19,6 +19,7 @@
         .arrow-head { fill-opacity: 0.85; }
         .order-hold { stroke-width: 3px; fill: none; opacity: 0.9; }
         .order-support { stroke-width: 2px; stroke-dasharray: 4 2; opacity: 0.9; }
+        .order-support-invalid { stroke: #e53e3e; stroke-width: 2px; stroke-dasharray: 2 2; opacity: 0.7; }
         .unit-shape { stroke-width: 2px; stroke: #1a202c; }
         .result-marker { font-size: 24px; font-weight: bold; text-anchor: middle; paint-order: stroke; stroke: #1a202c; stroke-width: 3px; }
         .tooltip { position: absolute; text-align: center; padding: 8px; font-size: 12px; background: #4a5568; color: #f7fafc; border: 0px; border-radius: 8px; pointer-events: none; opacity: 0; transition: opacity 0.2s; }
@@ -43,7 +44,7 @@
         <div class="tooltip"></div>
         
         <div id="legend" class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-400 mt-6">
-            <div><span class="inline-block w-3 h-3 bg-gray-800 border-2 border-gray-400 rounded-full mr-2 align-middle"></span>Supply Center</div>
+             <div><span class="inline-block w-3 h-3 bg-gray-800 border-2 border-gray-400 rounded-full mr-2 align-middle"></span>Supply Center</div>
             <div><span class="inline-block w-3 h-3 bg-gray-800 border-2 border-gray-700 rounded-full mr-2 align-middle"></span>Province</div>
             <div class="flex items-center"><svg width="20" height="10" class="mr-2"><line x1="0" y1="5" x2="20" y2="5" class="order-arrow" stroke="#9f7aea"></line></svg>Move</div>
             <div class="flex items-center"><svg width="20" height="10" class="mr-2"><line x1="0" y1="5" x2="20" y2="5" class="order-support" stroke="#ed8936"></line></svg>Support</div>
@@ -56,8 +57,9 @@
     let provinces = {};
     let units = [];
     let currentTurnOrders = [];
+    let simulation;
     const nationColors = {'France': '#6366f1', 'Germany': '#a0aec0', 'England': '#e53e3e'};
-    const orderColors = {'Move': '#9f7aea', 'Support': '#ed8936', 'Hold': '#48bb78', 'Success': '#38a169', 'Fail': '#e53e3e'};
+    const orderColors = {'Move': '#9f7aea', 'Support': '#ed8936', 'Hold': '#48bb78', 'Success': '#38a169', 'Fail': '#e53e3e', 'Cut': '#f56565'};
     
     // --- D3 SETUP ---
     const container = d3.select("#visualization");
@@ -118,17 +120,21 @@
     function handleMessage(data) {
         switch(data.type) {
             case 'initial_state':
+                // *** FIX: Handles initial load and reloads, setting the map and current units ***
                 provinces = data.provinces;
                 units = data.units;
-                drawMap(data.adjacencies);
-                drawUnits();
-                centerAndZoom();
+                currentTurnOrders = [];
+                d3.select("#subtitle").text(`Connected. Current turn: ${data.season} ${data.year}.`);
+                initializeForceSimulation(Object.values(provinces), data.adjacencies);
                 break;
             case 'turn_update':
+                // *** FIX: Authoritative update for the start of a new turn ***
                 units = data.units;
-                currentTurnOrders = [];
-                d3.select("#subtitle").text(`Resolving turn for ${data.season} ${data.year}. View terminal to input orders.`);
+                currentTurnOrders = []; // Clear orders from previous turn
+                d3.select("#subtitle").text(`Starting turn: ${data.season} ${data.year}. View terminal to input orders.`);
+                // Clear all dynamic elements from the last turn
                 g.selectAll(".orders, .units, .result-marker").remove();
+                // Redraw units in their new positions
                 drawUnits();
                 break;
             case 'add_order':
@@ -136,7 +142,8 @@
                 drawOrders(currentTurnOrders);
                 break;
             case 'adjudication_result':
-                updateVisualization(data.results);
+                // Adjudication results trigger animations, but the next 'turn_update' provides the final state
+                updateVisualization(data.results, data.details);
                 break;
             case 'game_over':
                 d3.select("#subtitle").text("Game Over. The connection has been closed.");
@@ -144,168 +151,151 @@
         }
     }
 
-    // --- RENDERING & VISUALIZATION (REWRITTEN FOR ROBUSTNESS) ---
-    function drawMap(adjacencies) {
-        g.select(".links").remove();
-        g.select(".nodes").remove();
+    function initializeForceSimulation(provinceNodes, adjacencyLinks) {
+        const links = adjacencyLinks.map(d => ({...d}));
+        
+        simulation = d3.forceSimulation(provinceNodes)
+            .force("link", d3.forceLink(links).id(d => d.id).distance(100))
+            .force("charge", d3.forceManyBody().strength(-400))
+            .force("center", d3.forceCenter(width / 2, height / 2));
 
-        g.append("g").attr("class", "links")
-            .selectAll("line").data(adjacencies).join("line")
-            .attr("class", "adjacency-line")
-            .attr("x1", d => provinces[d.source].x).attr("y1", d => provinces[d.source].y)
-            .attr("x2", d => provinces[d.target].x).attr("y2", d => provinces[d.target].y);
+        g.select(".links").remove();
+        const link = g.append("g").attr("class", "links")
+            .selectAll("line").data(links).join("line").attr("class", "adjacency-line");
+
+        g.select(".nodes").remove();
+        const node = g.append("g").attr("class", "nodes")
+            .selectAll("g").data(provinceNodes).join("g").attr("class", "province");
             
-        const provinceNodes = g.append("g").attr("class", "nodes")
-            .selectAll("g").data(Object.values(provinces), d => d.id).join("g")
-            .attr("class", "province").attr("transform", d => `translate(${d.x},${d.y})`);
+        node.append("circle")
+            .attr("r", d => d.is_supply_center ? 12 : 10)
+            .attr("class", d => d.is_supply_center ? 'sc-node' : 'province-node');
+
+        node.append("text").attr("y", -18).text(d => d.name);
+        
+        simulation.on("tick", () => {
+            link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+            node.attr("transform", d => `translate(${d.x},${d.y})`);
             
-        provinceNodes.append("circle").attr("r", d => d.sc ? 12 : 10).attr("class", d => d.sc ? 'sc-node' : 'province-node');
-        provinceNodes.append("text").attr("y", -18).text(d => d.name);
+            drawUnits();
+            drawOrders(currentTurnOrders);
+        });
     }
     
-    function drawUnits() {
-        g.select(".units").remove();
-        g.append("g").attr("class", "units")
-            .selectAll("g.unit-group")
-            .data(units, d => d.id)
-            .join(
-                enter => {
-                    const unitEl = enter.append("g")
-                        .attr("class", "unit-group")
-                        .attr("id", d => `unit-vis-${d.id}`)
-                        .attr("transform", d => `translate(${provinces[d.location].x}, ${provinces[d.location].y})`);
-                    
-                    unitEl.append("rect")
-                        .attr("x", -7.5).attr("y", -7.5)
-                        .attr("width", 15).attr("height", 15)
-                        .attr("class", "unit-shape")
-                        .style("fill", d => nationColors[d.nation]);
-                    
-                    unitEl.on("mouseover", (event, d) => {
-                        tooltip.transition().duration(200).style("opacity", .9);
-                        tooltip.html(`<b>${d.id}</b><br/>${d.nation} ${d.type}`)
-                            .style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 28) + "px");
-                    }).on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
-                    
-                    return unitEl;
-                }
-            );
+    function getProvinceNode(provinceId) {
+        if (!simulation) return null;
+        return simulation.nodes().find(p => p.id === provinceId);
     }
 
-    function drawOrders(orders) {
-        g.select(".orders").remove();
-        const orderGroup = g.append("g").attr("class", "orders");
-
-        orderGroup.selectAll("g.order-vis-group")
-            .data(orders, d => d.id)
+    function drawUnits() {
+        if (!simulation) return;
+        g.select(".units").remove();
+        g.append("g").attr("class", "units")
+            .selectAll("g.unit-group").data(units, d => d.id)
             .join(enter => {
-                const orderEl = enter.append("g")
-                    .attr("class", "order-vis-group")
-                    .attr("id", d => `order-vis-${d.id}`);
-
-                // Draw Holds
-                orderEl.filter(d => d.type === 'Hold')
-                    .append("circle").attr("class", "order-hold")
-                    .attr("cx", d => provinces[d.unit.location].x).attr("cy", d => provinces[d.unit.location].y)
-                    .attr("r", 20).attr("stroke", orderColors.Hold);
-
-                // Draw Moves
-                orderEl.filter(d => d.type === 'Move')
-                    .append("line").attr("class", "order-arrow")
-                    .attr("x1", d => provinces[d.unit.location].x).attr("y1", d => provinces[d.unit.location].y)
-                    .attr("x2", d => provinces[d.to_province_id].x).attr("y2", d => provinces[d.to_province_id].y)
-                    .attr("stroke", orderColors.Move).attr("marker-end", "url(#arrow)");
-
-                // Draw Supports
-                orderEl.filter(d => d.type === 'Support' && !d.supported_order_id.includes("INVALID"))
-                    .append("line").attr("class", "order-support")
-                    .attr("stroke", orderColors.Support)
-                    .each(function(d) {
-                        const startPos = provinces[d.unit.location];
-                        const supportedOrder = orders.find(o => o.id === d.supported_order_id);
-                        if (!startPos || !supportedOrder) { d3.select(this).remove(); return; }
-                        
-                        let targetPos;
-                        if (supportedOrder.type === 'Hold') {
-                            targetPos = provinces[supportedOrder.unit.location];
-                        } else if (supportedOrder.type === 'Move') {
-                            const supportedStart = provinces[supportedOrder.unit.location];
-                            const supportedEnd = provinces[supportedOrder.to_province_id];
-                            if (!supportedStart || !supportedEnd) { d3.select(this).remove(); return; }
-                            targetPos = { x: (supportedStart.x + supportedEnd.x) / 2, y: (supportedStart.y + supportedEnd.y) / 2 };
-                        }
-                        
-                        if (targetPos) {
-                            d3.select(this)
-                                .attr("x1", startPos.x).attr("y1", startPos.y)
-                                .attr("x2", targetPos.x).attr("y2", targetPos.y);
-                        } else {
-                            d3.select(this).remove();
-                        }
-                    });
+                const unitEl = enter.append("g").attr("class", "unit-group").attr("id", d => `unit-vis-${d.id}`);
+                unitEl.append("rect").attr("x", -7.5).attr("y", -7.5).attr("width", 15).attr("height", 15)
+                    .attr("class", "unit-shape").style("fill", d => nationColors[d.nationality]);
+                unitEl.on("mouseover", (event, d) => {
+                    tooltip.transition().duration(200).style("opacity", .9);
+                    tooltip.html(`<b>${d.id}</b><br/>${d.nationality} ${d.type}`)
+                        .style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 28) + "px");
+                }).on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+                return unitEl;
+            })
+            .attr("transform", d => {
+                const provinceNode = getProvinceNode(d.location);
+                return provinceNode ? `translate(${provinceNode.x}, ${provinceNode.y})` : null;
             });
     }
 
-    function updateVisualization(results) {
+    function drawOrders(orders) {
+        if (!simulation) return;
+        g.select(".orders").remove();
+        const orderGroup = g.append("g").attr("class", "orders");
+
+        orderGroup.selectAll("g.order-vis-group").data(orders, d => d.id)
+            .join(enter => {
+                const orderEl = enter.append("g").attr("class", "order-vis-group").attr("id", d => `order-vis-${d.id}`);
+                orderEl.filter(d => d.type === 'Hold').append("circle").attr("class", "order-hold").attr("stroke", orderColors.Hold);
+                orderEl.filter(d => d.type === 'Move').append("line").attr("class", "order-arrow").attr("stroke", orderColors.Move).attr("marker-end", "url(#arrow)");
+                orderEl.filter(d => d.type === 'Support').append("line")
+                    .attr("class", d => d.is_valid_support ? "order-support" : "order-support-invalid")
+                    .attr("stroke", d => d.is_valid_support ? orderColors.Support : orderColors.Fail);
+            });
+
+        orderGroup.selectAll(".order-hold").attr("cx", d => getProvinceNode(d.unit.location)?.x)
+            .attr("cy", d => getProvinceNode(d.unit.location)?.y).attr("r", 20);
+        orderGroup.selectAll(".order-arrow")
+            .attr("x1", d => getProvinceNode(d.unit.location)?.x)
+            .attr("y1", d => getProvinceNode(d.unit.location)?.y)
+            .attr("x2", d => getProvinceNode(d.to_province_id)?.x)
+            .attr("y2", d => getProvinceNode(d.to_province_id)?.y);
+        orderGroup.selectAll(".order-support, .order-support-invalid")
+            .each(function(d) {
+                const startNode = getProvinceNode(d.unit.location);
+                if (!startNode) { d3.select(this).remove(); return; }
+                let targetPos = { x: startNode.x, y: startNode.y - 15 };
+                if (d.is_valid_support) {
+                    const supportedStart = getProvinceNode(d.supported_action_start_loc);
+                    const supportedEnd = getProvinceNode(d.supported_action_end_loc);
+                    if (supportedStart && supportedEnd) {
+                        targetPos = { x: (supportedStart.x + supportedEnd.x) / 2, y: (supportedStart.y + supportedEnd.y) / 2 };
+                    }
+                }
+                d3.select(this).attr("x1", startNode.x).attr("y1", startNode.y)
+                    .attr("x2", targetPos.x).attr("y2", targetPos.y);
+            });
+    }
+
+    function updateVisualization(results, details) {
         Object.entries(results).forEach(([unitId, outcome]) => {
             const order = currentTurnOrders.find(o => o.unit.id === unitId);
             if (!order) return;
             
             const orderVis = d3.select(`#order-vis-${order.id}`);
             const success = (outcome === 'moves' || outcome === 'stands');
-            
+            const supportStatus = details.support_statuses[order.id];
+
             if (!orderVis.empty()) {
-                orderVis.selectAll("line, circle").transition().duration(500)
-                    .attr("stroke", success ? orderColors.Success : orderColors.Fail);
+                let finalColor = success ? orderColors.Success : orderColors.Fail;
+                if (order.type === 'Support' && supportStatus === 'cut') {
+                    finalColor = orderColors.Cut;
+                }
+                orderVis.selectAll("line, circle").transition().duration(500).attr("stroke", finalColor);
             }
 
             const unitVis = d3.select(`#unit-vis-${unitId}`);
             if (outcome === 'moves') {
-                const endPos = provinces[order.to_province_id];
-                unitVis.transition().duration(1000).delay(200)
-                    .attr("transform", `translate(${endPos.x}, ${endPos.y})`);
+                const endNode = getProvinceNode(order.to_province_id);
+                if (endNode) {
+                    unitVis.transition().duration(1000).delay(200)
+                        .attr("transform", `translate(${endNode.x}, ${endNode.y})`);
+                }
             } else if (outcome === 'stands' && order.type === 'Move') {
-                const startPos = provinces[order.unit.location];
-                const endPos = provinces[order.to_province_id];
-                g.append("text").attr("class", "result-marker")
-                    .attr("x", (startPos.x + endPos.x) / 2).attr("y", (startPos.y + endPos.y) / 2 + 8)
-                    .style("fill", orderColors.Fail).text("✕").style("opacity", 0)
-                    .transition().duration(500).delay(500).style("opacity", 1);
+                const startNode = getProvinceNode(order.unit.location);
+                const endNode = getProvinceNode(order.to_province_id);
+                if (startNode && endNode) {
+                    g.append("text").attr("class", "result-marker")
+                        .attr("x", (startNode.x + endNode.x) / 2).attr("y", (startNode.y + endNode.y) / 2 + 8)
+                        .style("fill", orderColors.Fail).text("✕").style("opacity", 0)
+                        .transition().duration(500).delay(500).style("opacity", 1);
+                }
             }
         });
     }
-
-    // --- RESPONSIVENESS ---
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => { clearTimeout(timeout); func(...args); };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-    function handleResize() {
+    
+    window.addEventListener('resize', () => {
         width = container.node().getBoundingClientRect().width;
         height = container.node().getBoundingClientRect().height;
         svg.attr("width", width).attr("height", height);
-        centerAndZoom();
-    }
-    function centerAndZoom() {
-        if (Object.keys(provinces).length === 0) return;
-        const x_coords = Object.values(provinces).map(p => p.x);
-        const y_coords = Object.values(provinces).map(p => p.y);
-        const min_x = Math.min(...x_coords); const max_x = Math.max(...x_coords);
-        const min_y = Math.min(...y_coords); const max_y = Math.max(...y_coords);
-        const data_width = max_x - min_x; const data_height = max_y - min_y;
-        const scale = Math.min(width / data_width, height / data_height) * 0.9;
-        const translate_x = width / 2 - scale * (min_x + data_width / 2);
-        const translate_y = height / 2 - scale * (min_y + data_height / 2);
-        const initial_transform = d3.zoomIdentity.translate(translate_x, translate_y).scale(scale);
-        svg.transition().duration(750).call(zoom.transform, initial_transform);
-    }
-    
-    window.addEventListener('resize', debounce(handleResize, 150));
-    connect(); // Start the connection process
+        if (simulation) {
+            simulation.force("center", d3.forceCenter(width / 2, height / 2)).restart();
+        }
+    });
+
+    connect();
 
 </script>
 
