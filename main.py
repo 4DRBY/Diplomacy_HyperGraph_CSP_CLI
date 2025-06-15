@@ -1,12 +1,13 @@
 # main.py
 # Main application entry point and game loop.
-# This version is refactored into a Game class to correctly handle state
-# for clients that connect or reload mid-game.
+# This version is refactored to allow map selection at startup.
 
 import asyncio
 import websockets
 import json
 import math
+import os
+from pathlib import Path
 from collections import defaultdict
 from game_engine.map import GameMap
 from game_engine.gamestate import GameState
@@ -31,10 +32,47 @@ def sanitize_for_json(data):
         return None
     return data
 
+def select_map():
+    """Scans the data directory for map files and prompts the user to select one."""
+    data_dir = Path(__file__).parent / 'data'
+    # Find all .json files, excluding game_save.json
+    map_files = sorted([f for f in os.listdir(data_dir) if f.endswith('.json') and f != 'game_save.json'])
+
+    if not map_files:
+        print("Error: No map files found in the 'data' directory.")
+        return None
+
+    print("\n--- Please Select a Map ---")
+    for i, map_file in enumerate(map_files):
+        # Create a user-friendly name from the filename
+        display_name = map_file.replace('.json', '').replace('_', ' ').title()
+        print(f"  [{i + 1}] {display_name}")
+
+    while True:
+        try:
+            choice = input(f"\nEnter the number of the map you want to play (1-{len(map_files)}): ")
+            choice_index = int(choice) - 1
+            if 0 <= choice_index < len(map_files):
+                selected_map_path = data_dir / map_files[choice_index]
+                print(f"Loading map: {map_files[choice_index]}...")
+                return str(selected_map_path)
+            else:
+                print(f"Invalid number. Please enter a number between 1 and {len(map_files)}.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+        except KeyboardInterrupt:
+            print("\nExiting.")
+            return None
+
+
 class Game:
     """Encapsulates the entire game logic, state, and WebSocket communication."""
-    def __init__(self):
-        self.game_map = GameMap('data/classic_map.json')
+    def __init__(self, map_path: str):
+        if not map_path or not Path(map_path).exists():
+            raise FileNotFoundError(f"The selected map file could not be found at: {map_path}")
+            
+        self.game_map = GameMap(map_path)
+        # Note: You might want to create different game_save.json files for each map
         self.game_state = GameState(self.game_map, 'data/game_save.json')
         self.connected_clients = set()
 
@@ -93,7 +131,6 @@ class Game:
             print(f"\n--- Orders for {nation} ---")
             for unit in sorted(units_by_nationality[nation], key=lambda u: u.id):
                 
-                # *** FIX: Restore the helper text for adjacent territories ***
                 available_moves = self.game_state.game_map.adjacencies.get(unit.location, [])
                 if available_moves:
                     print(f"    (Unit {unit.id} in {unit.location} can move to: {', '.join(available_moves)})")
@@ -176,12 +213,24 @@ class Game:
 async def main():
     port = 8765
     print(f"--- Starting Diplomacy Engine ---")
+    
+    # Let the user select the map before starting the server
+    selected_map_path = select_map()
+    if not selected_map_path:
+        return # Exit if no map was chosen or an error occurred
+
     print(f"WebSocket server started on ws://localhost:{port}")
     print("Please open 'Visualiser/diplomacy_visualiser.html' in your browser to see the game board.")
     
-    game = Game()
-    async with websockets.serve(game.register, "localhost", port):
-        await game.game_loop()
+    try:
+        game = Game(selected_map_path)
+        async with websockets.serve(game.register, "localhost", port):
+            await game.game_loop()
+    except FileNotFoundError as e:
+        print(f"\nError: {e}")
+    except Exception as e:
+        print(f"\nAn unexpected error occurred: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
