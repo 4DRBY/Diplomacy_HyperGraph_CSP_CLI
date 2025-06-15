@@ -120,21 +120,17 @@
     function handleMessage(data) {
         switch(data.type) {
             case 'initial_state':
-                // *** FIX: Handles initial load and reloads, setting the map and current units ***
                 provinces = data.provinces;
                 units = data.units;
                 currentTurnOrders = [];
                 d3.select("#subtitle").text(`Connected. Current turn: ${data.season} ${data.year}.`);
-                initializeForceSimulation(Object.values(provinces), data.adjacencies);
+                initializeForceSimulation(Object.values(provinces), data.adjacencies, data.centralProvinceId);
                 break;
             case 'turn_update':
-                // *** FIX: Authoritative update for the start of a new turn ***
                 units = data.units;
-                currentTurnOrders = []; // Clear orders from previous turn
+                currentTurnOrders = [];
                 d3.select("#subtitle").text(`Starting turn: ${data.season} ${data.year}. View terminal to input orders.`);
-                // Clear all dynamic elements from the last turn
                 g.selectAll(".orders, .units, .result-marker").remove();
-                // Redraw units in their new positions
                 drawUnits();
                 break;
             case 'add_order':
@@ -142,7 +138,6 @@
                 drawOrders(currentTurnOrders);
                 break;
             case 'adjudication_result':
-                // Adjudication results trigger animations, but the next 'turn_update' provides the final state
                 updateVisualization(data.results, data.details);
                 break;
             case 'game_over':
@@ -151,13 +146,22 @@
         }
     }
 
-    function initializeForceSimulation(provinceNodes, adjacencyLinks) {
+    // --- RENDERING & VISUALIZATION (REWRITTEN FOR FORCE-DIRECTED LAYOUT) ---
+    function initializeForceSimulation(provinceNodes, adjacencyLinks, centralProvinceId) {
+        // *** FIX: Anchor the layout around the most connected province ***
+        const centralNode = provinceNodes.find(p => p.id === centralProvinceId);
+        if (centralNode) {
+            centralNode.fx = width / 2;
+            centralNode.fy = height / 2;
+        }
+
         const links = adjacencyLinks.map(d => ({...d}));
         
         simulation = d3.forceSimulation(provinceNodes)
-            .force("link", d3.forceLink(links).id(d => d.id).distance(100))
-            .force("charge", d3.forceManyBody().strength(-400))
-            .force("center", d3.forceCenter(width / 2, height / 2));
+            .force("link", d3.forceLink(links).id(d => d.id).distance(120).strength(0.5))
+            .force("charge", d3.forceManyBody().strength(-500))
+            .force("x", d3.forceX(width / 2).strength(0.05)) // A gentle pull to the center
+            .force("y", d3.forceY(height / 2).strength(0.05));
 
         g.select(".links").remove();
         const link = g.append("g").attr("class", "links")
@@ -291,7 +295,12 @@
         height = container.node().getBoundingClientRect().height;
         svg.attr("width", width).attr("height", height);
         if (simulation) {
-            simulation.force("center", d3.forceCenter(width / 2, height / 2)).restart();
+            const centralNode = simulation.nodes().find(n => n.id === centralProvinceId);
+            if(centralNode) {
+                centralNode.fx = width / 2;
+                centralNode.fy = height / 2;
+            }
+            simulation.alpha(0.3).restart(); // Give the simulation a boost to rearrange
         }
     });
 

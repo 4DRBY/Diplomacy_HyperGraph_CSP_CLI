@@ -41,23 +41,27 @@ class Game:
     async def register(self, websocket):
         """Registers a new client, sends the current state, and handles disconnection."""
         self.connected_clients.add(websocket)
+        print(f"Visualizer connected. Total connections: {len(self.connected_clients)}")
         
-        
-        # *** FIX: Send the current game state to the newly connected client ***
         try:
+            central_province_id = None
+            if self.game_map.adjacencies:
+                central_province_id = max(self.game_map.adjacencies, key=lambda p: len(self.game_map.adjacencies[p]))
+
             initial_state_message = {
                 "type": "initial_state",
                 "provinces": {pid: p.__dict__ for pid, p in self.game_map.provinces.items()},
                 "adjacencies": [{"source": s, "target": t} for s, t_list in self.game_map.adjacencies.items() for t in t_list],
                 "units": [u.__dict__ for u in self.game_state.units.values()],
                 "season": self.game_state.season,
-                "year": self.game_state.year
+                "year": self.game_state.year,
+                "centralProvinceId": central_province_id
             }
             await websocket.send(json.dumps(sanitize_for_json(initial_state_message)))
             await websocket.wait_closed()
         finally:
             self.connected_clients.remove(websocket)
-            
+            print(f"Visualizer disconnected. Total connections: {len(self.connected_clients)}")
 
     async def broadcast(self, message):
         """Broadcasts a message to all connected clients."""
@@ -88,6 +92,12 @@ class Game:
         for nation in sorted(units_by_nationality.keys()):
             print(f"\n--- Orders for {nation} ---")
             for unit in sorted(units_by_nationality[nation], key=lambda u: u.id):
+                
+                # *** FIX: Restore the helper text for adjacent territories ***
+                available_moves = self.game_state.game_map.adjacencies.get(unit.location, [])
+                if available_moves:
+                    print(f"    (Unit {unit.id} in {unit.location} can move to: {', '.join(available_moves)})")
+
                 while True:
                     try:
                         prompt = f"  Order for {unit.type} at {unit.location}: "

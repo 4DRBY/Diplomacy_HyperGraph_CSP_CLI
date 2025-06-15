@@ -5,7 +5,8 @@
       { "id": "FRA_A_1", "nationality": "France", "unit_type": "Army", "location": "PAR" },
       { "id": "GER_A_1", "nationality": "Germany", "unit_type": "Army", "location": "MUN" },
       { "id": "GER_A_2", "nationality": "Germany", "unit_type": "Army", "location": "RUH" },
-      { "id": "ENG_A_1", "nationality": "England", "unit_type": "Army", "location": "BEL" }
+      { "id": "ENG_A_1", "nationality": "England", "unit_type": "Army", "location": "BEL" },
+      { "id": "ENG_A_2", "nationality": "England", "unit_type": "Army", "location": "LON" }
     ]
   }
   

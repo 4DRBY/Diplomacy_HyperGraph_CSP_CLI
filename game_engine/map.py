@@ -25,13 +25,16 @@ class GameMap:
     
     Args:
         map_file_path (str or Path, optional): Path to the map JSON file. 
-            Defaults to the classic map in the data directory.
+            If not provided, will use the classic map from the data directory.
     """
-    def __init__(self, map_file_path=None):
+    def __init__(self, map_file_path=DEFAULT_MAP_PATH):
         self.provinces = {}
         self.adjacencies = {}
         self.distances = {}
+        # Ensure we're using a Path object and the default map if no path provided
         map_path = Path(map_file_path) if map_file_path else DEFAULT_MAP_PATH
+        if not map_path.exists():
+            raise FileNotFoundError(f"Map file not found at: {map_path}")
         self._load_map(map_path)
         self._calculate_all_distances()
 

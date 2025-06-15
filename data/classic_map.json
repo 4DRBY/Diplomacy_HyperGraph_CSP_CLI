@@ -4,14 +4,17 @@
       "BUR": { "name": "Burgundy", "is_supply_center": false, "is_coastal": false, "type": "land" },
       "MUN": { "name": "Munich", "is_supply_center": true, "is_coastal": false, "type": "land" },
       "RUH": { "name": "Ruhr", "is_supply_center": true, "is_coastal": false, "type": "land" },
-      "BEL": { "name": "Belgium", "is_supply_center": true, "is_coastal": true, "type": "land" }
+      "BEL": { "name": "Belgium", "is_supply_center": true, "is_coastal": true, "type": "land" },
+      "LON": { "name": "London", "is_supply_center": true, "is_coastal": true, "type": "land"}
     },
+
     "adjacencies": {
       "PAR": ["BUR", "BEL"],
       "BUR": ["PAR", "MUN", "RUH"],
       "MUN": ["BUR", "RUH"],
       "RUH": ["BUR", "MUN", "BEL"],
-      "BEL": ["RUH", "PAR"]
+      "BEL": ["RUH", "PAR"],
+      "LON": ["PAR"]
     }
   }
   
