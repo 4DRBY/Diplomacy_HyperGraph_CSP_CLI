@@ -45,6 +45,29 @@ def display_orders(orders):
 
 def display_results(results, details, game_state):
     """Displays explicit success/fail status, conflict analysis, and final positions."""
+    
+        # --- NEW CONFLICT ANALYSIS SECTION ---
+    print("\n--- Conflict Analysis ---")
+    if not details.get('conflicts'):
+        print("  - No contested provinces this turn.")
+    else:
+        for province_id, conflict in details['conflicts'].items():
+            print(f"\n  Conflict in {conflict['province_name']}:")
+            
+            participants_str = []
+            for unit_id, strength in conflict['strengths'].items():
+                unit = game_state.units[unit_id]
+                order = next((o for o in game_state.turn_hypergraph.orders.values() if o.unit.id == unit_id), None)
+                action = f"move by {unit_id}" if isinstance(order, Move) else f"hold by {unit_id}"
+                participants_str.append(f"The {action} (Strength {strength})")
+            print(f"    - Battle: {' vs '.join(participants_str)}")
+            
+            if conflict['is_tie']:
+                print("    - Outcome: BOUNCE. The forces were of equal strength. All units fail to enter or are held in place.")
+            else:
+                winner_id = conflict['winner']
+                print(f"    - Outcome: {winner_id} wins with superior strength.")
+    
     print("\n--- Order Resolution ---")
     if isinstance(results, str):
         print(f"  Error: {results}")
@@ -90,27 +113,6 @@ def display_results(results, details, game_state):
             else:
                 print(f"  - [FAILED]  Hold: {unit_id} failed; the unit was DISLODGED.")
 
-    # --- NEW CONFLICT ANALYSIS SECTION ---
-    print("\n--- Conflict Analysis ---")
-    if not details.get('conflicts'):
-        print("  - No contested provinces this turn.")
-    else:
-        for province_id, conflict in details['conflicts'].items():
-            print(f"\n  Conflict in {conflict['province_name']}:")
-            
-            participants_str = []
-            for unit_id, strength in conflict['strengths'].items():
-                unit = game_state.units[unit_id]
-                order = next((o for o in game_state.turn_hypergraph.orders.values() if o.unit.id == unit_id), None)
-                action = f"move by {unit_id}" if isinstance(order, Move) else f"hold by {unit_id}"
-                participants_str.append(f"The {action} (Strength {strength})")
-            print(f"    - Battle: {' vs '.join(participants_str)}")
-            
-            if conflict['is_tie']:
-                print("    - Outcome: BOUNCE. The forces were of equal strength. All units fail to enter or are held in place.")
-            else:
-                winner_id = conflict['winner']
-                print(f"    - Outcome: {winner_id} wins with superior strength.")
 
     # --- REFORMATTED FINAL POSITIONS ---
     print("\n--- Final Board Positions for Next Turn ---")

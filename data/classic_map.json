@@ -7,11 +7,11 @@
       "BEL": { "name": "Belgium", "is_supply_center": true, "is_coastal": true, "type": "land" }
     },
     "adjacencies": {
-      "PAR": ["BUR"],
+      "PAR": ["BUR", "BEL"],
       "BUR": ["PAR", "MUN", "RUH"],
       "MUN": ["BUR", "RUH"],
       "RUH": ["BUR", "MUN", "BEL"],
-      "BEL": ["RUH"]
+      "BEL": ["RUH", "PAR"]
     }
   }
   
