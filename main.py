@@ -131,6 +131,7 @@ class Game:
             print(f"\n--- Orders for {nation} ---")
             for unit in sorted(units_by_nationality[nation], key=lambda u: u.id):
                 
+                # *** FIX: Restore the helper text for adjacent territories ***
                 available_moves = self.game_state.game_map.adjacencies.get(unit.location, [])
                 if available_moves:
                     print(f"    (Unit {unit.id} in {unit.location} can move to: {', '.join(available_moves)})")
