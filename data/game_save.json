@@ -2,10 +2,10 @@
     "year": 1901,
     "season": "Spring",
     "units": [
-      { "id": "Fra_A_Par", "nationality": "France", "unit_type": "Army", "location": "PAR" },
-      { "id": "Ger_A_Mun", "nationality": "Germany", "unit_type": "Army", "location": "MUN" },
-      { "id": "Ger_A_Ruh", "nationality": "Germany", "unit_type": "Army", "location": "RUH" },
-      { "id": "Eng_A_Bel", "nationality": "England", "unit_type": "Army", "location": "BEL" }
+      { "id": "FRA_A_1", "nationality": "France", "unit_type": "Army", "location": "PAR" },
+      { "id": "GER_A_1", "nationality": "Germany", "unit_type": "Army", "location": "MUN" },
+      { "id": "GER_A_2", "nationality": "Germany", "unit_type": "Army", "location": "RUH" },
+      { "id": "ENG_A_1", "nationality": "England", "unit_type": "Army", "location": "BEL" }
     ]
   }
   

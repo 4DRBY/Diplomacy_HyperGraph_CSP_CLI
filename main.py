@@ -41,7 +41,7 @@ class Game:
     async def register(self, websocket):
         """Registers a new client, sends the current state, and handles disconnection."""
         self.connected_clients.add(websocket)
-        print(f"Visualizer connected. Total connections: {len(self.connected_clients)}")
+        
         
         # *** FIX: Send the current game state to the newly connected client ***
         try:
@@ -57,7 +57,7 @@ class Game:
             await websocket.wait_closed()
         finally:
             self.connected_clients.remove(websocket)
-            print(f"Visualizer disconnected. Total connections: {len(self.connected_clients)}")
+            
 
     async def broadcast(self, message):
         """Broadcasts a message to all connected clients."""
@@ -71,7 +71,6 @@ class Game:
         """Runs a single, complete game turn."""
         display_turn_info(self.game_state)
         
-        # *** FIX: This message now correctly syncs all clients at the start of a new turn ***
         await self.broadcast({
             "type": "turn_update",
             "season": self.game_state.season,
