@@ -5,16 +5,23 @@
       "MUN": { "name": "Munich", "is_supply_center": true, "is_coastal": false, "type": "land" },
       "RUH": { "name": "Ruhr", "is_supply_center": true, "is_coastal": false, "type": "land" },
       "BEL": { "name": "Belgium", "is_supply_center": true, "is_coastal": true, "type": "land" },
-      "LON": { "name": "London", "is_supply_center": true, "is_coastal": true, "type": "land"}
+      "LON": { "name": "London", "is_supply_center": true, "is_coastal": true, "type": "land"},
+      "EDI": { "name": "Edinburgh", "is_supply_center": true, "is_coastal": false, "type": "land" },
+      "MAR": { "name": "Marseilles", "is_supply_center": true, "is_coastal": false, "type": "land" },
+      "WAR": { "name": "Warsaw", "is_supply_center": true, "is_coastal": true, "type": "land" },
+      "MOS": { "name": "MOSCOW", "is_supply_center": true, "is_coastal": true, "type": "land"}
     },
 
     "adjacencies": {
-      "PAR": ["BUR", "BEL"],
+      "PAR": ["BUR", "BEL", "LON"],
       "BUR": ["PAR", "MUN", "RUH"],
       "MUN": ["BUR", "RUH"],
       "RUH": ["BUR", "MUN", "BEL"],
       "BEL": ["RUH", "PAR"],
-      "LON": ["PAR"]
+      "LON": ["PAR", "EDI"],
+      "MAR": ["PAR"],
+      "EDI": ["LON"],
+      "WAR": ["MOS", "RUH", "MUN", "BUR"]
     }
   }
   
