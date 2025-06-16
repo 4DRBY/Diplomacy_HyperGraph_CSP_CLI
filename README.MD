@@ -18,6 +18,10 @@ Core Concepts
 
     CSP Adjudication: The heart of the engine is the Adjudicator. It translates the hypergraph of orders into a Constraint Satisfaction Problem. The game's rules are defined as logical constraints, and a powerful CSP solver finds the single, consistent outcome for all units simultaneously. This declarative approach is more robust and maintainable than traditional procedural algorithms.
 
+    Phase-Based Turn System: The game progresses through a defined sequence of phases for each year: Spring Movement, Spring Retreats, Fall Movement, Fall Retreats, and Winter Builds/Disbands. This structured progression allows for distinct types of orders and actions appropriate to each phase of a Diplomacy turn.
+
+    Unit Testing: Core components of the game engine, including the adjudicator, game state logic, and order parsing, are now covered by a suite of unit tests, enhancing the robustness and reliability of the system.
+
 Project Structure
 
 diplomacy_hypergraph/
@@ -35,6 +39,11 @@ diplomacy_hypergraph/
 │   ├── display.py          # Functions for printing the board, orders, and results
 │   └── parser.py           # Functions for parsing user commands
 │
+├── tests/                  # Unit tests for the project
+│   ├── __init__.py
+│   ├── test_cli.py         # Tests for command-line interface components
+│   └── test_game_engine.py # Tests for core game engine logic
+│
 ├── Web/
 │    ├──Diplomacy_visualiser.html          # Renders the gameboard in the browser via Websockets
 │
@@ -44,7 +53,7 @@ diplomacy_hypergraph/
 
     Python: Python 3.7 or higher is recommended.
 
-    Dependencies: The project requires python-constraint2 for adjudication and websockets for real-time communication. A requirements.txt file is provided.
+    Dependencies: The project requires `python-constraint` for adjudication and `websockets` for real-time communication. Testing uses `pytest`. A `requirements.txt` file is provided.
 
 To set up the project, clone the repository and install the dependencies using pip:
 

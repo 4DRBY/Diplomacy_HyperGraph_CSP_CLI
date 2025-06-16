@@ -19,8 +19,15 @@ from cli.display import (display_welcome, display_board_state,
 
 def sanitize_for_json(data):
     """
-    Recursively traverses a data structure and replaces non-JSON-compliant
-    values like float('inf') with None (which becomes 'null' in JSON).
+    Recursively traverses a data structure (dicts, lists, tuples) and converts
+    non-JSON-serializable values to JSON-compliant equivalents.
+    Currently handles:
+    - float('inf') and float('-inf'): Replaces with None (becomes 'null' in JSON).
+    - Tuples: Converts to lists.
+    Custom objects (like Unit, Province, Order) should ideally be converted to dicts
+    (e.g., using obj.__dict__) before being included in the data structure passed here,
+    though this function will not fail on them, they might not serialize as expected
+    by the client unless they are simple data containers.
     """
     if isinstance(data, dict):
         return {k: sanitize_for_json(v) for k, v in data.items()}
@@ -66,7 +73,19 @@ def select_map():
 
 
 class Game:
-    """Encapsulates the entire game logic, state, and WebSocket communication."""
+    """
+    Encapsulates the entire game logic, state, and WebSocket communication.
+
+    MULTI-PLAYER SCALABILITY NOTES:
+    - Instance Management: Currently, this class represents a single global game. For multiple
+      concurrent games, a manager would be needed to map client connections or game IDs
+      to distinct Game instances.
+    - Player Identification: WebSocket handlers would need to identify which player a
+      connection belongs to, likely via an authentication token or session ID established
+      on connection.
+    - State Scoping: Game state (self.game_state, self.game_map) is per-instance. If Game
+      instances are managed, this is fine.
+    """
     def __init__(self, map_path: str):
         if not map_path or not Path(map_path).exists():
             raise FileNotFoundError(f"The selected map file could not be found at: {map_path}")
@@ -77,7 +96,15 @@ class Game:
         self.connected_clients = set()
 
     async def register(self, websocket):
-        """Registers a new client, sends the current state, and handles disconnection."""
+        """
+        Registers a new client, sends the current state, and handles disconnection.
+
+        MULTI-PLAYER SCALABILITY NOTES:
+        - Authentication: For actual multi-player, an authentication step would be needed here
+          to associate the websocket connection with a specific player/nation in the game.
+        - Player-Specific State: The initial state sent might need to be tailored if players
+          should only see certain parts of the game state (e.g., their own orders).
+        """
         self.connected_clients.add(websocket)
         print(f"Visualizer connected. Total connections: {len(self.connected_clients)}")
         
@@ -102,7 +129,17 @@ class Game:
             print(f"Visualizer disconnected. Total connections: {len(self.connected_clients)}")
 
     async def broadcast(self, message):
-        """Broadcasts a message to all connected clients."""
+        """
+        Broadcasts a message to all connected clients.
+
+        MULTI-PLAYER SCALABILITY NOTES:
+        - Targeted Messaging: In a multi-player game, many messages should be targeted to
+          specific players or groups (e.g., orders for one nation, private messages)
+          rather than broadcast to everyone. This would require managing connections
+          per player.
+        - Selective Broadcasting: Some messages (like general game state updates) might still
+          be broadcast, but potentially with player-specific views filtered.
+        """
         if self.connected_clients:
             sanitized_message = sanitize_for_json(message)
             tasks = [asyncio.create_task(client.send(json.dumps(sanitized_message))) for client in self.connected_clients]
@@ -110,7 +147,19 @@ class Game:
                 await asyncio.wait(tasks)
 
     async def run_turn(self):
-        """Runs a single, complete game turn."""
+        """
+        Runs a single, complete game turn.
+
+        MULTI-PLAYER SCALABILITY NOTES:
+        - Order Submission: Instead of iterating through all units locally, the server would
+          wait for orders from each player's client via WebSocket messages. This would involve
+          deadlines, handling partial submissions, and potentially private order confirmation.
+        - Turn Progression: Logic to advance turns/phases might depend on all players
+          confirming readiness or a timeout, rather than synchronous input.
+        - Order Privacy: Raw orders (`raw_orders`) should not be broadcast if submitted
+          privately until the adjudication/results phase. The current broadcasting of
+          `add_order` is for visualization and assumes a single local player.
+        """
         display_turn_info(self.game_state)
         
         await self.broadcast({
@@ -159,23 +208,15 @@ class Game:
                     except Exception as e:
                         print(f"    Invalid order format. Please try again. Error: {e}")
 
-        for order in raw_orders:
-            if isinstance(order, Support):
-                supported_unit = next((u for u in self.game_state.units.values() if u.location == order.supported_unit_loc), None)
-                if not supported_unit: order.supported_order_id = "INVALID_UNIT"; continue
-                target_order = next((o for o in raw_orders if o.unit.id == supported_unit.id), None)
-                if not target_order: order.supported_order_id = "INVALID_NO_ORDER"; continue
-                action_province = order.move_destination if order.is_move else supported_unit.location
-                supporter_adjacencies = self.game_state.game_map.adjacencies.get(order.unit.location, [])
-                if action_province not in supporter_adjacencies: order.supported_order_id = "INVALID_NOT_ADJACENT"; continue
-                is_match = (order.is_move and isinstance(target_order, Move) and target_order.to_province_id == order.move_destination) or \
-                           (not order.is_move and isinstance(target_order, Hold))
-                order.supported_order_id = target_order.id if is_match else "INVALID_ACTION_MISMATCH"
-
         turn_hypergraph = TurnHypergraph()
-        for order in raw_orders:
+        for order in raw_orders: # Add all parsed (raw) orders to the hypergraph first
             turn_hypergraph.add_order(order)
-        self.game_state.turn_hypergraph = turn_hypergraph
+
+        # After all orders are in the hypergraph, perform validation and linking for supports.
+        # This requires game_state for unit locations and map adjacencies.
+        turn_hypergraph.finalize_and_validate_supports(self.game_state)
+
+        self.game_state.turn_hypergraph = turn_hypergraph # Assign the processed hypergraph to game_state
         
         display_orders(turn_hypergraph.orders.values())
         
