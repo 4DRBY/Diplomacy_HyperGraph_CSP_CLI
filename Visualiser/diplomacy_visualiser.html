@@ -55,6 +55,7 @@
     </div>
 
 <script>
+    console.log("Main script execution started."); // <-- ADDED THIS LOG
     // --- GLOBAL STATE ---
     let provinces = {};
     let units = [];
@@ -105,6 +106,7 @@
     }
 
     function handleMessage(data) {
+        console.log("handleMessage called with data type:", data.type, "Data:", data); // <-- ADDED THIS LOG
         switch(data.type) {
             case 'initial_state':
                 provinces = data.provinces;
@@ -115,12 +117,13 @@
                 adjacencyLinks = data.adjacencies.map(d => ({...d}));
                 d3.select("#subtitle").text(`Connected. Current turn: ${data.season} ${data.year}.`);
                 initializeForceSimulation();
+                drawUnits(); // Draw initial units
                 break;
             case 'turn_update':
                 units = data.units;
                 currentTurnOrders = [];
                 d3.select("#subtitle").text(`Starting turn: ${data.season} ${data.year}. View terminal to input orders.`);
-                g.selectAll(".orders, .units, .result-marker").remove();
+                g.selectAll(".orders, .result-marker").remove(); // Keep .units and let drawUnits handle updates
                 drawUnits();
                 break;
             case 'add_order':
@@ -128,7 +131,21 @@
                 drawOrders(currentTurnOrders);
                 break;
             case 'adjudication_result':
-                updateVisualization(data.results, data.details);
+                // Assuming data.units contains the updated list of units after adjudication
+                if (data.units) {
+                    units = data.units; // Update the global units array
+                }
+                // Clear old orders and results markers before drawing new state
+                g.selectAll(".orders, .result-marker").remove();
+                currentTurnOrders = []; // Clear orders for the next turn input
+
+                // updateVisualization can now focus on specific result markers if needed,
+                // but unit redrawing is handled by drawUnits() using the updated global 'units'.
+                updateVisualization(data.results, data.details); // This will call drawUnits()
+
+                // Update subtitle or other UI elements based on adjudication if necessary
+                // For example:
+                // d3.select("#subtitle").text(`Adjudication complete. ${data.season} ${data.year}. Ready for next turn or retreats.`);
                 break;
         }
     }
@@ -206,7 +223,162 @@
         );
     }
     
-    // --- All other functions (drawUnits, drawOrders, etc.) remain the same ---
+    function drawUnits() {
+        console.log("drawUnits called. Number of units:", units.length, "Units data:", JSON.parse(JSON.stringify(units)));
+        g.selectAll(".unit").remove(); // Clear existing units
+
+        if (units.length === 0) {
+            console.log("No units to draw.");
+            return;
+        }
+
+        console.log("Province nodes available for lookup:", provinceNodes.length, JSON.parse(JSON.stringify(provinceNodes.slice(0,5))));
+
+
+        const unitGroups = g.selectAll(".unit")
+            .data(units, d => d.id)
+            .join("g")
+            .attr("class", "unit")
+            .attr("transform", function(d) {
+                const provinceNode = provinceNodes.find(p => p.id === d.location);
+                if (provinceNode && typeof provinceNode.x === 'number' && typeof provinceNode.y === 'number') {
+                    // console.log(`Unit ${d.id} at ${d.location} (${provinceNode.name}) -> x:${provinceNode.x}, y:${provinceNode.y}`);
+                    return `translate(${provinceNode.x},${provinceNode.y})`;
+                }
+                console.warn(`Unit ${d.id} at ${d.location}: Province node or coordinates not found. Defaulting to (0,0). ProvinceNode:`, provinceNode ? JSON.parse(JSON.stringify(provinceNode)) : "Not Found");
+                return `translate(0,0)`;
+            });
+
+        unitGroups.each(function(d) { // d is unit data
+            // console.log("Processing unit for shape:", d.id, d.type);
+            const group = d3.select(this);
+            const unitColor = nationColors[d.nationality] || "#A9A9A9";
+            const strokeColor = nationColors[d.nationality] ? d3.color(unitColor).darker(0.7) : "#606060";
+
+            if (d.type === 'army') {
+                group.append("circle")
+                    .attr("r", 6)
+                    .style("fill", unitColor)
+                    .style("stroke", strokeColor)
+                    .style("stroke-width", "2px");
+            } else if (d.type === 'fleet') {
+                // Simple triangle for fleets
+                group.append("polygon")
+                    .attr("points", "0,-6 6,6 -6,6") // Adjust points for desired triangle shape/size
+                    .style("fill", unitColor)
+                    .style("stroke", strokeColor)
+                    .style("stroke-width", "2px");
+            } else { // Default shape if type is unknown
+                 group.append("rect") // e.g. a square for unknown
+                    .attr("x", -5)
+                    .attr("y", -5)
+                    .attr("width", 10)
+                    .attr("height", 10)
+                    .style("fill", unitColor)
+                    .style("stroke", strokeColor)
+                    .style("stroke-width", "2px");
+            }
+        });
+
+        // Ensure units are updated during simulation ticks as well,
+        // so they follow the province nodes if the layout is still settling.
+        if (simulation) {
+            simulation.on("tick.units", () => {
+                g.selectAll(".unit").attr("transform", function(d) {
+                     // 'd' here is the unit data bound to the .unit element
+                    const provinceNode = provinceNodes.find(p => p.id === d.location);
+                    if (provinceNode && provinceNode.x !== undefined && provinceNode.y !== undefined) {
+                        return `translate(${provinceNode.x},${provinceNode.y})`;
+                    }
+                    // If the province node isn't found or doesn't have coordinates yet,
+                    // keep the unit at its current transformation.
+                    // This might happen if provinces array is not yet populated or simulation hasn't run.
+                    return d3.select(this).attr("transform");
+                });
+            });
+        }
+    }
+
+    function drawOrders(orders) {
+        g.selectAll(".order-visual").remove(); // Clear previous order visuals
+
+        const orderGroup = g.append("g").attr("class", "orders order-visual");
+
+        orders.forEach(order => {
+            const unit = units.find(u => u.id === order.unitId);
+            if (!unit) return; // Unit not found, cannot draw order
+
+            const sourceProvinceNode = provinceNodes.find(p => p.id === unit.location);
+            if (!sourceProvinceNode || sourceProvinceNode.x === undefined) return; // Source province not found or not rendered
+
+            if (order.type === 'Move') {
+                const targetProvinceNode = provinceNodes.find(p => p.id === order.to);
+                if (!targetProvinceNode || targetProvinceNode.x === undefined) return;
+
+                orderGroup.append("line")
+                    .attr("x1", sourceProvinceNode.x)
+                    .attr("y1", sourceProvinceNode.y)
+                    .attr("x2", targetProvinceNode.x)
+                    .attr("y2", targetProvinceNode.y)
+                    .attr("stroke", orderColors.Move || "#a78bfa")
+                    .attr("class", "order-arrow")
+                    .attr("marker-end", "url(#arrow)");
+
+            } else if (order.type === 'Hold') {
+                orderGroup.append("circle")
+                    .attr("cx", sourceProvinceNode.x)
+                    .attr("cy", sourceProvinceNode.y)
+                    .attr("r", 10) // Larger than unit, but under it ideally
+                    .attr("stroke", orderColors.Hold || "#4ade80")
+                    .attr("class", "order-hold");
+
+            } else if (order.type === 'SupportHold') {
+                const supportedProvinceNode = provinceNodes.find(p => p.id === order.supportedUnitLocation);
+                if (!supportedProvinceNode || supportedProvinceNode.x === undefined) return;
+
+                orderGroup.append("line")
+                    .attr("x1", sourceProvinceNode.x)
+                    .attr("y1", sourceProvinceNode.y)
+                    .attr("x2", supportedProvinceNode.x)
+                    .attr("y2", supportedProvinceNode.y)
+                    .attr("stroke", orderColors.Support || "#f59e0b")
+                    .attr("class", "order-support");
+
+            } else if (order.type === 'SupportMove') {
+                // Support is drawn from supporter to the *destination* of the move they are supporting.
+                const targetOfSupportedMoveNode = provinceNodes.find(p => p.id === order.supportedMoveTo);
+                if (!targetOfSupportedMoveNode || targetOfSupportedMoveNode.x === undefined) return;
+
+                // Optional: could also draw a line to the unit being supported first, then to its target,
+                // but direct to target of move is common.
+                orderGroup.append("line")
+                    .attr("x1", sourceProvinceNode.x)
+                    .attr("y1", sourceProvinceNode.y)
+                    .attr("x2", targetOfSupportedMoveNode.x)
+                    .attr("y2", targetOfSupportedMoveNode.y)
+                    .attr("stroke", orderColors.Support || "#f59e0b")
+                    .attr("class", "order-support");
+            }
+        });
+
+        // Ensure orders are drawn above links but below units/provinces if necessary
+        // This can be managed by the order of g.append in the main setup,
+        // or by using .raise() on node groups after drawing orders.
+        // For now, ensure province nodes (and units on them) are raised above order lines.
+        g.selectAll('.province-group').raise();
+        g.selectAll('.unit').raise();
+    }
+
+    function updateVisualization(results, details) {
+        // Placeholder for now - will be implemented in a later step
+        console.log("Updating visualization with results:", results, "Details:", details);
+        // After results, unit positions might change, so redraw them.
+        // The actual unit data update should happen in handleMessage for 'adjudication_result'
+        // before calling this or by this function receiving new unit data.
+        drawUnits(); // Re-draw units assuming 'units' global array has been updated
+    }
+
+    // --- All other functions (drawOrders, etc.) remain the same ---
     // (For brevity, they are omitted but should be copied from your previous version)
 
     // Event Listeners
