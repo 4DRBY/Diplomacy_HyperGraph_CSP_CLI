@@ -59,19 +59,6 @@ This CSP-based approach has several advantages:
   * **Maintainability**: If a rule needs to be changed, you only need to update the corresponding constraint, rather than untangling complex procedural code.
   * **Robustness**: The CSP solver can handle even the most convoluted and paradoxical situations, such as circular support chains or convoys, without any special-case logic.
 
-## Philosophy: Using AI to Learn
-
-This project was built with the philosophy of using AI as a tool for learning and development. The developer used an AI assistant throughout the entire process, from initial conception to the final code. This approach demonstrates a modern workflow where human creativity and AI-powered tools collaborate to build complex systems.
-
-By offloading some of the more tedious aspects of coding, the developer was able to focus on the high-level architecture and the core logical problems, such as how to model the game's rules as a CSP. The AI assistant helped with:
-
-  * **Boilerplate Code**: Generating repetitive code for classes, functions, and file I/O.
-  * **Debugging**: Identifying and fixing bugs in the code.
-  * **Learning New Concepts**: The AI assistant provided explanations and examples of new concepts, such as hypergraphs and CSPs, which were crucial for the project's design.
-  * **Exploring Alternative Solutions**: The AI assistant could quickly suggest and prototype different approaches to a problem, allowing the developer to make more informed decisions about the project's direction.
-
-This project is a testament to the power of using AI as a partner in the creative process of software development. It shows that AI can not only help us to be more productive but can also help us to learn and to tackle more ambitious and complex projects.
-
 ## Project Structure
 
 ```
@@ -137,4 +124,4 @@ When prompted in the terminal, enter orders for each unit using standard Diploma
   * **Support Hold**: To support a unit that is holding, specify the location of the unit you are supporting. For example: `MUN S RUH`
   * **Support Move**: To support a unit that is moving, specify the starting location of the moving unit and its destination. For example: `BEL S RUH - MUN`
 
-After all orders are entered, the adjudicator will resolve the turn and display a detailed report in the terminal, including which orders succeeded or failed, a breakdown of all conflicts, and the final board positions. The visualizer will also be updated with the results.
+After all orders are entered, the adjudicator will resolve the turn and display a detailed report in the terminal, including which orders succeeded or failed, a breakdown of all conflicts, and the final board positions. The visualizer will also be updated with the results.~
