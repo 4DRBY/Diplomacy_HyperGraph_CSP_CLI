@@ -55,6 +55,7 @@
     </div>
 
 <script>
+    console.log("Main script execution started."); // <-- ADDED THIS LOG
     // --- GLOBAL STATE ---
     let provinces = {};
     let units = [];
@@ -105,6 +106,7 @@
     }
 
     function handleMessage(data) {
+        console.log("handleMessage called with data type:", data.type, "Data:", data); // <-- ADDED THIS LOG
         switch(data.type) {
             case 'initial_state':
                 provinces = data.provinces;
