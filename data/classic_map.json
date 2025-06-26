@@ -15,7 +15,7 @@
     },
 
     "adjacencies": {
-      "PAR": ["BUR", "BEL"],
+      "PAR": ["BUR", "BEL", "LON"],
       "BUR": ["PAR", "MUN", "RUH"],
       "MUN": ["BUR", "RUH"],
       "RUH": ["BUR", "MUN", "BEL"],

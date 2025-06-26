@@ -73,7 +73,8 @@ class Game:
             
         self.game_map = GameMap(map_path)
         # Note: You might want to create different game_save.json files for each map
-        self.game_state = GameState(self.game_map, 'data/game_save.json')
+        game_save_path = Path(__file__).parent / 'data' / 'game_save.json'
+        self.game_state = GameState(self.game_map, str(game_save_path))
         self.connected_clients = set()
 
     async def register(self, websocket):

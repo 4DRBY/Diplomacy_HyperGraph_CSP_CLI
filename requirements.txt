@@ -1,2 +1,2 @@
-python-constraint2
-websockets
+python-constraint2>=2.2.3
+websockets>=15.0.1
