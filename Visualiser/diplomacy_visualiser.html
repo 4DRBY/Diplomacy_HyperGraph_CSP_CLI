@@ -222,21 +222,33 @@
     }
     
     function drawUnits() {
+        console.log("drawUnits called. Number of units:", units.length, "Units data:", JSON.parse(JSON.stringify(units)));
         g.selectAll(".unit").remove(); // Clear existing units
+
+        if (units.length === 0) {
+            console.log("No units to draw.");
+            return;
+        }
+
+        console.log("Province nodes available for lookup:", provinceNodes.length, JSON.parse(JSON.stringify(provinceNodes.slice(0,5))));
+
 
         const unitGroups = g.selectAll(".unit")
             .data(units, d => d.id)
             .join("g")
             .attr("class", "unit")
-            .attr("transform", function(d) { // Use function to access 'this' if needed, or d for data
+            .attr("transform", function(d) {
                 const provinceNode = provinceNodes.find(p => p.id === d.location);
-                if (provinceNode && provinceNode.x !== undefined && provinceNode.y !== undefined) {
+                if (provinceNode && typeof provinceNode.x === 'number' && typeof provinceNode.y === 'number') {
+                    // console.log(`Unit ${d.id} at ${d.location} (${provinceNode.name}) -> x:${provinceNode.x}, y:${provinceNode.y}`);
                     return `translate(${provinceNode.x},${provinceNode.y})`;
                 }
-                return `translate(0,0)`; // Default if not found or no coords yet
+                console.warn(`Unit ${d.id} at ${d.location}: Province node or coordinates not found. Defaulting to (0,0). ProvinceNode:`, provinceNode ? JSON.parse(JSON.stringify(provinceNode)) : "Not Found");
+                return `translate(0,0)`;
             });
 
         unitGroups.each(function(d) { // d is unit data
+            // console.log("Processing unit for shape:", d.id, d.type);
             const group = d3.select(this);
             const unitColor = nationColors[d.nationality] || "#A9A9A9";
             const strokeColor = nationColors[d.nationality] ? d3.color(unitColor).darker(0.7) : "#606060";
