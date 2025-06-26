@@ -7,6 +7,7 @@ import websockets
 import json
 import math
 import os
+import webbrowser
 from pathlib import Path
 from collections import defaultdict
 from game_engine.map import GameMap
@@ -220,6 +221,13 @@ async def main():
     selected_map_path = select_map()
     if not selected_map_path:
         return # Exit if no map was chosen or an error occurred
+
+    # Automatically open the visualiser in a new browser tab
+    visualiser_path = Path(__file__).parent / 'Visualiser' / 'diplomacy_visualiser.html'
+    if visualiser_path.exists():
+        webbrowser.get("windows-default").open_new_tab(visualiser_path.resolve().as_uri())
+    else:
+        print(f"Warning: Visualiser file not found at {visualiser_path}")
 
     print(f"WebSocket server started on ws://localhost:{port}")
     print("Please open 'Visualiser/diplomacy_visualiser.html' in your browser to see the game board.")
